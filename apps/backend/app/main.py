@@ -11,6 +11,13 @@ from fastapi import FastAPI
 if sys.platform == "win32":
     asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
 
+    # LiteLLM's aiohttp transport can't run on the Proactor loop (instant
+    # "Connection timed out, time taken=0.00xs" on every call). Force the
+    # httpx transport instead — same toggle the integration tests use.
+    import litellm
+
+    litellm.disable_aiohttp_transport = True
+
 logger = logging.getLogger(__name__)
 from fastapi.middleware.cors import CORSMiddleware
 
