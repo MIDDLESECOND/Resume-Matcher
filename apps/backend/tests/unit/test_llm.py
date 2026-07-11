@@ -4,7 +4,13 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from app.llm import _appears_truncated, _get_retry_temperature, _supports_temperature
+from app.llm import (
+    LLMConfig,
+    _appears_truncated,
+    _get_retry_temperature,
+    _supports_temperature,
+    _thinking_override,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -485,3 +491,231 @@ class TestCompleteDynamicTimeout:
         mock_calc_timeout.assert_called_once_with("completion", 8192, "deepseek")
         router.acompletion.assert_awaited_once()
         assert router.acompletion.call_args.kwargs["timeout"] == 180
+
+
+# ---------------------------------------------------------------------------
+# _thinking_override (DeepSeek V4 thinking-mode disable)
+# ---------------------------------------------------------------------------
+
+
+class TestThinkingOverride:
+    """Tests for _thinking_override()."""
+
+    def test_deepseek_v4_flash_disables_thinking(self):
+        """Non-reasoner deepseek models get thinking explicitly disabled."""
+        config = LLMConfig(provider="deepseek", model="deepseek-v4-flash", api_key="k")
+        assert _thinking_override(config) == {"thinking": {"type": "disabled"}}
+
+    def test_deepseek_chat_alias_disables_thinking(self):
+        """The legacy deepseek-chat alias also gets the override."""
+        config = LLMConfig(provider="deepseek", model="deepseek-chat", api_key="k")
+        assert _thinking_override(config) == {"thinking": {"type": "disabled"}}
+
+    def test_reasoning_effort_above_minimal_skips_override(self):
+        """low/medium/high reasoning_effort means the user opted into thinking."""
+        for effort in ("low", "medium", "high"):
+            config = LLMConfig(
+                provider="deepseek",
+                model="deepseek-v4-flash",
+                api_key="k",
+                reasoning_effort=effort,
+            )
+            assert _thinking_override(config) is None, effort
+
+    def test_minimal_reasoning_effort_still_disables_thinking(self):
+        """DeepSeek thinking is binary — "minimal" maps to disabled.
+
+        Regression guard: the gpt-5 one-shot migration leaves
+        reasoning_effort="minimal" in config.json; when the user later switches
+        to deepseek, that stale value must not keep thinking mode on (litellm
+        maps any non-"none" reasoning_effort to thinking={"type": "enabled"}).
+        """
+        config = LLMConfig(
+            provider="deepseek",
+            model="deepseek-v4-flash",
+            api_key="k",
+            reasoning_effort="minimal",
+        )
+        assert _thinking_override(config) == {"thinking": {"type": "disabled"}}
+
+    def test_reasoner_models_skip_override(self):
+        """Explicit reasoning models must not receive thinking=disabled."""
+        for model in ("deepseek-reasoner", "deepseek-r1", "DeepSeek-Reasoner"):
+            config = LLMConfig(provider="deepseek", model=model, api_key="k")
+            assert _thinking_override(config) is None, model
+
+    def test_other_providers_untouched(self):
+        """The override is deepseek-provider-specific."""
+        for provider in ("openai", "anthropic", "openrouter", "openai_compatible", "ollama", "groq", "gemini"):
+            config = LLMConfig(provider=provider, model="deepseek-v4-flash", api_key="k")
+            assert _thinking_override(config) is None, provider
+
+
+class TestThinkingExtraBody:
+    """extra_body={"thinking": ...} injection at the request-kwargs sites."""
+
+    @pytest.mark.asyncio
+    @patch("app.llm.get_router")
+    @patch("app.llm.get_model_name")
+    @patch("app.llm._supports_json_mode")
+    async def test_complete_json_sends_extra_body_for_deepseek(
+        self, mock_supports_json, mock_get_name, mock_get_router
+    ):
+        """complete_json passes the thinking-disable payload for deepseek."""
+        mock_supports_json.return_value = False
+        mock_get_name.return_value = "deepseek/deepseek-v4-flash"
+
+        choice = MagicMock()
+        choice.message.content = '{"answer": "ok"}'
+        response = MagicMock()
+        response.choices = [choice]
+
+        router = MagicMock()
+        router.acompletion = AsyncMock(return_value=response)
+        config = LLMConfig(provider="deepseek", model="deepseek-v4-flash", api_key="k")
+        mock_get_router.return_value = (router, config)
+
+        from app.llm import complete_json
+
+        result = await complete_json(prompt="Test prompt", schema_type="keywords")
+
+        assert result == {"answer": "ok"}
+        assert router.acompletion.call_args.kwargs["extra_body"] == {
+            "thinking": {"type": "disabled"}
+        }
+
+    @pytest.mark.asyncio
+    @patch("app.llm.get_router")
+    @patch("app.llm.get_model_name")
+    @patch("app.llm._supports_json_mode")
+    async def test_complete_json_no_extra_body_for_other_providers(
+        self, mock_supports_json, mock_get_name, mock_get_router
+    ):
+        """Non-deepseek providers must not receive the extra_body kwarg."""
+        mock_supports_json.return_value = False
+        mock_get_name.return_value = "gpt-4o"
+
+        choice = MagicMock()
+        choice.message.content = '{"answer": "ok"}'
+        response = MagicMock()
+        response.choices = [choice]
+
+        router = MagicMock()
+        router.acompletion = AsyncMock(return_value=response)
+        config = LLMConfig(provider="openai", model="gpt-4o", api_key="k")
+        mock_get_router.return_value = (router, config)
+
+        from app.llm import complete_json
+
+        await complete_json(prompt="Test prompt", schema_type="keywords")
+
+        assert "extra_body" not in router.acompletion.call_args.kwargs
+
+    @pytest.mark.asyncio
+    @patch("app.llm.get_router")
+    @patch("app.llm.get_model_name")
+    @patch("app.llm._supports_temperature")
+    async def test_complete_sends_extra_body_for_deepseek(
+        self, mock_supports_temp, mock_get_name, mock_get_router
+    ):
+        """complete() passes the thinking-disable payload for deepseek."""
+        mock_supports_temp.return_value = False
+        mock_get_name.return_value = "deepseek/deepseek-v4-flash"
+
+        choice = MagicMock()
+        choice.message.content = "Hello"
+        response = MagicMock()
+        response.choices = [choice]
+
+        router = MagicMock()
+        router.acompletion = AsyncMock(return_value=response)
+        config = LLMConfig(provider="deepseek", model="deepseek-v4-flash", api_key="k")
+        mock_get_router.return_value = (router, config)
+
+        from app.llm import complete
+
+        out = await complete(prompt="Hi")
+
+        assert out == "Hello"
+        assert router.acompletion.call_args.kwargs["extra_body"] == {
+            "thinking": {"type": "disabled"}
+        }
+
+    @pytest.mark.asyncio
+    @patch("app.llm.litellm.acompletion", new_callable=AsyncMock)
+    async def test_health_check_sends_extra_body_for_deepseek(self, mock_acompletion):
+        """check_llm_health (the Settings connection test) also disables thinking."""
+        choice = MagicMock()
+        choice.message.content = "Hello"
+        response = MagicMock()
+        response.choices = [choice]
+        mock_acompletion.return_value = response
+
+        from app.llm import check_llm_health
+
+        config = LLMConfig(provider="deepseek", model="deepseek-v4-flash", api_key="k")
+        result = await check_llm_health(config)
+
+        assert result["healthy"] is True
+        assert mock_acompletion.call_args.kwargs["extra_body"] == {
+            "thinking": {"type": "disabled"}
+        }
+
+    @pytest.mark.asyncio
+    @patch("app.llm.litellm.acompletion", new_callable=AsyncMock)
+    async def test_minimal_effort_not_forwarded_when_thinking_disabled(
+        self, mock_acompletion
+    ):
+        """When the override fires, reasoning_effort must NOT be sent.
+
+        litellm's deepseek transformation maps any non-"none" reasoning_effort
+        to thinking={"type": "enabled"} — forwarding "minimal" would re-enable
+        the thinking mode the extra_body payload just disabled.
+        """
+        choice = MagicMock()
+        choice.message.content = "Hello"
+        response = MagicMock()
+        response.choices = [choice]
+        mock_acompletion.return_value = response
+
+        from app.llm import check_llm_health
+
+        config = LLMConfig(
+            provider="deepseek",
+            model="deepseek-v4-flash",
+            api_key="k",
+            reasoning_effort="minimal",
+        )
+        result = await check_llm_health(config)
+
+        assert result["healthy"] is True
+        kwargs = mock_acompletion.call_args.kwargs
+        assert kwargs["extra_body"] == {"thinking": {"type": "disabled"}}
+        assert "reasoning_effort" not in kwargs
+
+    @pytest.mark.asyncio
+    @patch("app.llm.litellm.acompletion", new_callable=AsyncMock)
+    async def test_reasoning_effort_still_forwarded_for_other_providers(
+        self, mock_acompletion
+    ):
+        """Non-deepseek providers keep the original reasoning_effort behavior."""
+        choice = MagicMock()
+        choice.message.content = "Hello"
+        response = MagicMock()
+        response.choices = [choice]
+        mock_acompletion.return_value = response
+
+        from app.llm import check_llm_health
+
+        config = LLMConfig(
+            provider="openai",
+            model="gpt-5-nano",
+            api_key="k",
+            reasoning_effort="minimal",
+        )
+        result = await check_llm_health(config)
+
+        assert result["healthy"] is True
+        kwargs = mock_acompletion.call_args.kwargs
+        assert kwargs["reasoning_effort"] == "minimal"
+        assert "extra_body" not in kwargs

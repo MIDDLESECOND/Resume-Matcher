@@ -21,6 +21,8 @@ which respx can intercept. We also flush litellm's in-memory client cache so a
 client built under the aiohttp transport in an earlier test can't be reused.
 """
 
+import json
+
 import httpx
 import pytest
 import respx
@@ -345,3 +347,91 @@ class TestCheckHealthTransport:
         assert leaking_key not in detail
         assert "sk-abcd1234" not in detail
         assert "<redacted>" in detail
+
+
+# ---------------------------------------------------------------------------
+# deepseek — thinking-mode disable must reach the serialized request body
+# ---------------------------------------------------------------------------
+
+
+class TestDeepseekThinkingTransport:
+    """DeepSeek V4 defaults to thinking mode; the override must go over the wire.
+
+    LiteLLM does not disable deepseek-v4 thinking via reasoning_effort alone
+    (BerriAI/litellm#27453), so llm.py injects
+    ``extra_body={"thinking": {"type": "disabled"}}``. These tests assert on
+    the actual serialized HTTP request body — if litellm ever stops merging
+    ``extra_body`` into the JSON payload, or the injection is removed, they
+    go red.
+    """
+
+    @respx.mock
+    async def test_complete_sends_thinking_disabled_in_body(self):
+        """A deepseek complete() request carries thinking:disabled top-level."""
+        route = respx.post(url__regex=r"http://deepseek\.test/.*").mock(
+            return_value=httpx.Response(
+                200, json=_openai_chat_completion("hello", model="deepseek-v4-flash")
+            )
+        )
+
+        cfg = LLMConfig(
+            provider="deepseek",
+            model="deepseek-v4-flash",
+            api_key="sk-test",
+            api_base="http://deepseek.test/v1",
+        )
+        out = await complete("Hello", config=cfg)
+
+        assert out == "hello"
+        assert route.called
+        body = json.loads(route.calls.last.request.content)
+        assert body.get("thinking") == {"type": "disabled"}
+
+    @respx.mock
+    async def test_minimal_reasoning_effort_still_disables_thinking_on_the_wire(self):
+        """The exact field-reported failure: stored reasoning_effort="minimal".
+
+        litellm's deepseek transformation maps any non-"none" reasoning_effort
+        to thinking={"type": "enabled"} — so with "minimal" configured (e.g.
+        left over from the gpt-5 auto-migration) the serialized body used to
+        carry thinking=enabled. It must now carry thinking=disabled and no
+        reasoning_effort at all.
+        """
+        route = respx.post(url__regex=r"http://deepseek\.test/.*").mock(
+            return_value=httpx.Response(
+                200, json=_openai_chat_completion("hello", model="deepseek-v4-flash")
+            )
+        )
+
+        cfg = LLMConfig(
+            provider="deepseek",
+            model="deepseek-v4-flash",
+            api_key="sk-test",
+            api_base="http://deepseek.test/v1",
+            reasoning_effort="minimal",
+        )
+        out = await complete("Hello", config=cfg)
+
+        assert out == "hello"
+        body = json.loads(route.calls.last.request.content)
+        assert body.get("thinking") == {"type": "disabled"}
+        assert "reasoning_effort" not in body
+
+    @respx.mock
+    async def test_openai_compatible_body_has_no_thinking(self):
+        """Non-deepseek providers must not carry the thinking override."""
+        route = respx.post("http://local-llm.test/v1/chat/completions").mock(
+            return_value=httpx.Response(200, json=_openai_chat_completion("hello"))
+        )
+
+        cfg = LLMConfig(
+            provider="openai_compatible",
+            model="llama-3.1-8b",
+            api_key="",
+            api_base="http://local-llm.test/v1",
+        )
+        out = await complete("Hello", config=cfg)
+
+        assert out == "hello"
+        body = json.loads(route.calls.last.request.content)
+        assert "thinking" not in body

@@ -131,6 +131,35 @@ def _effective_api_key(provider: str, api_key: str) -> str:
     return api_key
 
 
+def _thinking_override(config: "LLMConfig") -> dict[str, Any] | None:
+    """Return an extra_body payload disabling DeepSeek V4 thinking mode.
+
+    DeepSeek V4 models default to thinking mode, which leaks reasoning text
+    into outputs and bills at the thinking rate. LiteLLM does not disable it
+    via reasoning_effort alone (BerriAI/litellm#27453), so the raw ``thinking``
+    param is passed through ``extra_body`` (which bypasses drop_params and
+    litellm's deepseek transformation — the latter silently drops
+    ``thinking={"type": "disabled"}`` when passed as a normal param).
+
+    DeepSeek thinking is binary, so ``reasoning_effort="minimal"`` (including
+    the value auto-migrated for former gpt-5 configs) maps to *disabled*;
+    ``low``/``medium``/``high`` mean the user opted into thinking. Explicit
+    reasoning models (deepseek-reasoner / R1) are never overridden.
+
+    When this returns a payload, callers must NOT forward ``reasoning_effort``:
+    litellm's deepseek transformation maps any non-"none" value to
+    ``thinking={"type": "enabled"}``, re-enabling what we just disabled.
+    """
+    if config.provider != "deepseek":
+        return None
+    if config.reasoning_effort and config.reasoning_effort != "minimal":
+        return None
+    model = config.model.lower()
+    if "reasoner" in model or "r1" in model:
+        return None
+    return {"thinking": {"type": "disabled"}}
+
+
 def _extract_text_parts(value: Any, depth: int = 0, max_depth: int = 10) -> list[str]:
     """Recursively extract text segments from nested response structures.
 
@@ -563,7 +592,10 @@ async def check_llm_health(
             "api_base": _normalize_api_base(config.provider, config.api_base),
             "timeout": LLM_TIMEOUT_HEALTH_CHECK,
         }
-        if config.reasoning_effort:
+        thinking = _thinking_override(config)
+        if thinking:
+            kwargs["extra_body"] = thinking
+        elif config.reasoning_effort:
             kwargs["reasoning_effort"] = config.reasoning_effort
 
         response = await litellm.acompletion(**kwargs)
@@ -676,7 +708,10 @@ async def complete(
         }
         if _supports_temperature(model_name, temperature):
             kwargs["temperature"] = temperature
-        if config.reasoning_effort:
+        thinking = _thinking_override(config)
+        if thinking:
+            kwargs["extra_body"] = thinking
+        elif config.reasoning_effort:
             kwargs["reasoning_effort"] = config.reasoning_effort
 
         response = await router.acompletion(**kwargs)
@@ -1114,7 +1149,10 @@ async def complete_json(
             retry_temp = _get_retry_temperature(model_name, attempt)
             if retry_temp is not None:
                 kwargs["temperature"] = retry_temp
-            if config.reasoning_effort:
+            thinking = _thinking_override(config)
+            if thinking:
+                kwargs["extra_body"] = thinking
+            elif config.reasoning_effort:
                 kwargs["reasoning_effort"] = config.reasoning_effort
 
             # JSON-012: Fallback to prompt-only JSON mode after JSON-mode failure.
