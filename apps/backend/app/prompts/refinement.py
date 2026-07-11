@@ -135,15 +135,17 @@ AI_PHRASE_REPLACEMENTS: dict[str, str] = {
 
 
 # Prompt for injecting missing keywords into a resume
-KEYWORD_INJECTION_PROMPT = """Inject the following keywords into this resume by reframing the candidate's existing experience in the job description's language. Target EVERY section (summary, work experience, projects, technical skills) by default.
+KEYWORD_INJECTION_PROMPT = """Inject the following keywords into this resume by reframing the candidate's existing experience in the job description's language.
 
 CRITICAL RULES:
 1. Only reframe with keywords the master resume substantively supports (e.g., if the master shows "used Python for data analysis", surface "Python" and "data analysis" language)
 2. Do NOT add skills, technologies, or certifications not in the master resume
-3. Rephrase existing bullet points and content to include keywords - do not invent new content, metrics, or work history
-4. Maintain the exact same JSON structure
-5. Do not use em-dashes (—) or their variants (---, --)
-6. Make keyword incorporation the DEFAULT across all content sections, not an optional enhancement
+3. Rework existing sentences so the keyword becomes part of the sentence itself. NEVER append an extra sentence to a bullet or the summary (e.g. never add trailing filler like "This involved X." or "This provided Y.") - a bullet must remain one natural statement of the same accomplishment
+4. Do NOT add new bullet points, new skill entries, or any new content - do not invent new content, metrics, or work history; only rephrase what exists
+5. If a keyword cannot be integrated naturally into an existing sentence, leave that content unchanged; forced or bolted-on phrasing is worse than a missing keyword
+6. Never change the candidate's job titles or describe the candidate using the target job's title
+7. Maintain the exact same JSON structure
+8. Do not use em-dashes (—) or their variants (---, --)
 
 Keywords to inject (only if supported by master resume):
 {keywords_to_inject}

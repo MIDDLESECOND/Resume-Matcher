@@ -356,7 +356,11 @@ def apply_diffs(
                         # else: a duplicate of an already-placed original — skip
                     elif is_skills and cf not in added_new:
                         skill = item.strip()
-                        if skill and _normalize_skill_key(skill) in allowed_skill_keys:
+                        if (
+                            skill
+                            and _normalize_skill_key(skill) in allowed_skill_keys
+                            and _find_skill_variant(skill, actual_value) is None
+                        ):
                             reordered.append(skill)  # verified new skill, requested position
                             added_new.add(cf)
                         else:
@@ -394,6 +398,15 @@ def apply_diffs(
             }
             if new_skill.casefold() in existing:
                 logger.info("Diff rejected (duplicate skill): %s", new_skill)
+                rejected.append(change)
+                continue
+            variant_of = _find_skill_variant(new_skill, actual_value)
+            if variant_of is not None:
+                logger.info(
+                    "Diff rejected (skill variant of existing '%s'): %s",
+                    variant_of,
+                    new_skill,
+                )
                 rejected.append(change)
                 continue
             if _normalize_skill_key(new_skill) not in allowed_skill_keys:
@@ -706,6 +719,47 @@ def _skill_mentioned_in_text(skill: str, text: str) -> bool:
     return bool(re.search(rf"(?<!\w){escaped}(?!\w)", text.lower()))
 
 
+# Generic JD keywords that must never become standalone skill entries — they
+# carry no signal on a skills list ("analytics", "automation") and read as
+# keyword-stuffing filler. Compared via _normalize_skill_key.
+GENERIC_SKILL_STOPLIST: frozenset[str] = frozenset(
+    {
+        "analytics",
+        "automation",
+        "ai",
+        "ai-enabled tools",
+        "data",
+        "technology",
+        "software",
+        "tools",
+        "reporting",
+        "communication",
+        "collaboration",
+        "leadership",
+        "teamwork",
+        "problem solving",
+        "problem-solving",
+    }
+)
+
+
+def _find_skill_variant(skill: str, existing: list[Any]) -> str | None:
+    """Return the existing skill that a proposed skill duplicates, if any.
+
+    Catches whole-term containment in either direction, so "AI Builder" is a
+    variant of an existing "Microsoft AI Builder" (and vice versa) — adding
+    both would render a duplicated skills list.
+    """
+    for item in existing:
+        if not isinstance(item, str) or not item.strip():
+            continue
+        if _skill_mentioned_in_text(skill, item) or _skill_mentioned_in_text(
+            item, skill
+        ):
+            return item
+    return None
+
+
 def _build_allowed_skill_target_keys(
     allowed_skill_targets: list[dict[str, Any] | str] | None,
 ) -> set[str]:
@@ -797,6 +851,30 @@ def verify_skill_target_plan(
                     "skill": original_skills[skill_key],
                     "source": "existing",
                     "reason": reason or "Already present in resume skills",
+                }
+            )
+        elif (
+            variant_of := _find_skill_variant(skill, list(original_skills.values()))
+        ) is not None:
+            # "AI Builder" when the resume lists "Microsoft AI Builder": treat
+            # as the existing skill (emphasize/reorder it) instead of accepting
+            # a near-duplicate entry that add_skill would append alongside it.
+            variant_key = _normalize_skill_key(variant_of)
+            if variant_key not in seen:
+                seen.add(variant_key)
+                accepted.append(
+                    {
+                        "skill": variant_of,
+                        "source": "existing",
+                        "reason": reason or f"Variant of existing skill '{variant_of}'",
+                    }
+                )
+        elif skill_key in GENERIC_SKILL_STOPLIST:
+            rejected.append(
+                {
+                    "skill": skill,
+                    "source": "generic",
+                    "reason": "Too generic to list as a standalone skill",
                 }
             )
         elif skill_key in jd_skills:

@@ -69,6 +69,44 @@ class TestRemoveAiPhrases:
         # The input dict should not be mutated by remove_ai_phrases
         assert data == data_before
 
+    def test_replacement_preserves_capitalization(self, sample_resume):
+        """A sentence-initial "Architected" must become "Designed", not "designed"."""
+        data = copy.deepcopy(sample_resume)
+        data["workExperience"][0]["description"][0] = "Architected a data platform"
+        cleaned, removed = remove_ai_phrases(data)
+        assert (
+            cleaned["workExperience"][0]["description"][0]
+            == "Designed a data platform"
+        )
+        assert "architected" in [r.lower() for r in removed]
+
+    def test_all_caps_match_gets_all_caps_replacement(self, sample_resume):
+        data = copy.deepcopy(sample_resume)
+        data["summary"] = "UTILIZED Python daily"
+        cleaned, _ = remove_ai_phrases(data)
+        assert cleaned["summary"] == "USED Python daily"
+
+    def test_master_wording_is_never_rewritten(self, sample_resume):
+        """Strings the candidate wrote (verbatim in master) survive the scrub.
+
+        The blacklist targets LLM writing tics; it must not rewrite the
+        candidate's own vocabulary (a Solutions Architect legitimately writes
+        "Architected ...").
+        """
+        data = copy.deepcopy(sample_resume)
+        own_bullet = "Architected a Python Dash dashboard for 100+ professionals"
+        llm_bullet = "Spearheaded the rollout of robust dashboards"
+        data["workExperience"][0]["description"] = [own_bullet, llm_bullet]
+        master = {"workExperience": [{"description": [own_bullet]}]}
+
+        cleaned, removed = remove_ai_phrases(data, "", master)
+
+        # The candidate's original bullet is untouched...
+        assert cleaned["workExperience"][0]["description"][0] == own_bullet
+        # ...while LLM-modified text is still scrubbed.
+        assert "spearheaded" not in cleaned["workExperience"][0]["description"][1].lower()
+        assert "spearheaded" in [r.lower() for r in removed]
+
 
 class TestValidateMasterAlignment:
     """Tests for validate_master_alignment() — fabrication detection."""

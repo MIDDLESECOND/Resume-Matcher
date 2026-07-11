@@ -165,6 +165,31 @@ class TestApplyDiffsAddSkill:
         assert len(rejected) == 1
         assert result["additional"]["technicalSkills"].count("Python") == 1
 
+    def test_add_skill_rejects_variant_of_existing_skill(self, sample_resume):
+        """"AI Builder" must not be appended when "Microsoft AI Builder" exists."""
+        data = copy.deepcopy(sample_resume)
+        data["additional"]["technicalSkills"] = ["Microsoft AI Builder", "Python"]
+        changes = [
+            ResumeChange(
+                path="additional.technicalSkills",
+                action="add_skill",
+                original=None,
+                value="AI Builder",
+                reason="Variant duplicate should be rejected",
+            )
+        ]
+        result, applied, rejected = apply_diffs(
+            data,
+            changes,
+            allowed_skill_targets=[{"skill": "AI Builder"}],
+        )
+        assert len(applied) == 0
+        assert len(rejected) == 1
+        assert result["additional"]["technicalSkills"] == [
+            "Microsoft AI Builder",
+            "Python",
+        ]
+
     def test_add_skill_rejects_non_skill_path(self, sample_resume):
         changes = [
             ResumeChange(

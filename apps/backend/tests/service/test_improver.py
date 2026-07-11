@@ -270,6 +270,49 @@ class TestSkillTargetPlanning:
         assert verified["accepted"][0]["source"] == "existing"
         assert verified["accepted"][1]["source"] == "jd_added"
 
+    def test_verify_skill_target_plan_maps_variant_to_existing_skill(self):
+        """"AI Builder" targets the existing "Microsoft AI Builder" entry
+        instead of being accepted as a near-duplicate addition."""
+        resume = {
+            "additional": {"technicalSkills": ["Microsoft AI Builder", "Python"]}
+        }
+        raw_plan = {"target_skills": [{"skill": "AI Builder", "reason": "JD term"}]}
+        verified = verify_skill_target_plan(
+            raw_plan,
+            original_resume_data=resume,
+            job_keywords={"required_skills": ["AI Builder"]},
+            job_description="Experience with AI Builder required.",
+        )
+        assert [item["skill"] for item in verified["accepted"]] == [
+            "Microsoft AI Builder"
+        ]
+        assert verified["accepted"][0]["source"] == "existing"
+        assert verified["rejected"] == []
+
+    def test_verify_skill_target_plan_rejects_generic_keywords(self):
+        """Vague JD words ("analytics", "automation") never become skill
+        entries, even when the JD lists them as required."""
+        resume = {"additional": {"technicalSkills": ["Python"]}}
+        raw_plan = {
+            "target_skills": [
+                {"skill": "analytics", "reason": "JD keyword"},
+                {"skill": "Automation", "reason": "JD keyword"},
+                {"skill": "Tableau", "reason": "JD required"},
+            ]
+        }
+        verified = verify_skill_target_plan(
+            raw_plan,
+            original_resume_data=resume,
+            job_keywords={"required_skills": ["analytics", "automation", "Tableau"]},
+            job_description="Requires analytics, automation, and Tableau.",
+        )
+        accepted_skills = [item["skill"] for item in verified["accepted"]]
+        rejected = {item["skill"]: item["source"] for item in verified["rejected"]}
+        # The concrete tool still passes through for user review...
+        assert accepted_skills == ["Tableau"]
+        # ...but the generic words are filtered with a distinct source tag.
+        assert rejected == {"analytics": "generic", "Automation": "generic"}
+
 
 class TestGenerateResumeDiffsEdgeCases:
     """Edge cases for generate_resume_diffs."""

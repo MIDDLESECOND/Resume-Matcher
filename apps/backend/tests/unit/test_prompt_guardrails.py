@@ -22,9 +22,12 @@ class TestJdIncorporationIsDefault:
         assert "By DEFAULT" in DIFF_IMPROVE_PROMPT
         assert "reframe" in DIFF_IMPROVE_PROMPT.lower()
 
-    def test_keyword_injection_targets_every_section_by_default(self):
-        assert "EVERY section" in KEYWORD_INJECTION_PROMPT
-        assert "DEFAULT" in KEYWORD_INJECTION_PROMPT
+    def test_keyword_injection_integrates_without_bolt_ons(self):
+        # The injection pass must weave keywords into existing sentences —
+        # appended filler sentences ("This involved X.") read as AI-written
+        # and were reported from real tailoring runs.
+        assert "NEVER append an extra sentence" in KEYWORD_INJECTION_PROMPT
+        assert "leave that content unchanged" in KEYWORD_INJECTION_PROMPT
 
     def test_cover_letter_reframes_in_jd_terminology(self):
         assert "terminology" in COVER_LETTER_PROMPT.lower()

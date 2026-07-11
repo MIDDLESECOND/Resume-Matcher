@@ -210,6 +210,7 @@ CRITICAL_TRUTHFULNESS_RULES_TEMPLATE = """CRITICAL TRUTHFULNESS RULES - NEVER VI
 7. {rule_7}
 8. Preserve factual accuracy - only use information provided by the candidate
 9. NEVER remove existing skills, certifications, languages, or awards. You may reorder by relevance, but every original item must remain.
+10. NEVER change the candidate's job titles or describe the candidate using the target job's title. The summary must stay anchored to the candidate's actual current title, promotions, and tenure.
 
 Violation of these rules could cause serious problems for the candidate in job interviews.
 """
@@ -528,6 +529,7 @@ RULES:
 10. Exception to rule 2: you may add a skill only if it appears in the verified skill targets below
 11. By DEFAULT, scan the summary and every work, project, and education description for content that already demonstrates a job-description keyword or skill, and reframe that text using the job description's terminology where it is not already phrased that way (per rule 9, leave content that already aligns well), while preserving the candidate's actual accomplishment. Do NOT add new work, metrics, or responsibilities; only restate existing content in the JD's language, and verify every reframe stays factually accurate.
 12. Preserve original capitalization, especially for proper nouns, technical terms (e.g., REST, API, AWS), and acronyms. Do not change the casing of words that were capitalized in the original.
+13. NEVER change the candidate's job titles or describe the candidate using the target job's title (e.g., do not rewrite the summary of a "Solutions Architect" to open with the posting's title). Keep the summary anchored to the candidate's actual current title, promotions, and tenure.
 
 PATHS you can target:
 - "summary" — the resume summary text

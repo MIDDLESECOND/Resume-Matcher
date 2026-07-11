@@ -123,7 +123,7 @@ async def refine_resume(
 
     # Pass 2: AI phrase removal and polish (local, no LLM call)
     if config.enable_ai_phrase_removal:
-        current, removed = remove_ai_phrases(current, job_description)
+        current, removed = remove_ai_phrases(current, job_description, master_resume)
         ai_phrases_found.extend(removed)
         if removed:
             logger.info("Removed %d AI phrases: %s", len(removed), removed)
@@ -230,19 +230,53 @@ def analyze_keyword_gaps(
     )
 
 
+def _match_case(original: str, replacement: str) -> str:
+    """Adapt a replacement word's casing to the matched token's casing.
+
+    "Architected" -> "Designed" (not "designed"), "UTILIZED" -> "USED".
+    Empty replacements pass through unchanged.
+    """
+    if not replacement or not original:
+        return replacement
+    if original.isupper() and len(original) > 1:
+        return replacement.upper()
+    if original[0].isupper():
+        return replacement[0].upper() + replacement[1:]
+    return replacement
+
+
+def _collect_strings(obj: Any, acc: set[str]) -> None:
+    """Recursively collect every string value in a nested structure."""
+    if isinstance(obj, str):
+        acc.add(obj)
+    elif isinstance(obj, list):
+        for item in obj:
+            _collect_strings(item, acc)
+    elif isinstance(obj, dict):
+        for value in obj.values():
+            _collect_strings(value, acc)
+
+
 def remove_ai_phrases(
     data: dict[str, Any],
     job_description: str = "",
+    master_resume: dict[str, Any] | None = None,
 ) -> tuple[dict[str, Any], list[str]]:
     """Remove AI-generated phrases from resume content.
 
     This is a local operation that doesn't require an LLM call.
-    It performs case-insensitive replacement of blacklisted phrases.
-    Phrases that appear in the job description are protected from removal.
+    It performs case-insensitive, case-preserving replacement of blacklisted
+    phrases. Phrases that appear in the job description are protected from
+    removal, and any string that exists verbatim in the master resume is left
+    untouched — the scrub targets LLM-introduced wording, never the
+    candidate's own words (e.g. a Solutions Architect who wrote
+    "Architected ..." keeps it).
 
     Args:
         data: Resume data dictionary
         job_description: Job description text; phrases found here are skipped
+        master_resume: Master resume data; strings found verbatim in it are
+            never rewritten
 
     Returns:
         Tuple of (cleaned data, list of removed phrases)
@@ -257,6 +291,13 @@ def remove_ai_phrases(
     if jd_protected:
         logger.info("JD-protected phrases (skipping removal): %s", jd_protected)
 
+    # Strings the candidate wrote themselves (present verbatim in the master)
+    # are exempt: the blacklist exists to catch LLM writing tics, and original
+    # human-authored wording must survive refinement unchanged.
+    master_texts: set[str] = set()
+    if master_resume:
+        _collect_strings(master_resume, master_texts)
+
     # Use a set to avoid duplicate tracking
     removed: set[str] = set()
 
@@ -269,14 +310,16 @@ def remove_ai_phrases(
             if phrase.lower() in cleaned.lower():
                 removed.add(phrase)
                 replacement = AI_PHRASE_REPLACEMENTS.get(phrase.lower(), "")
-                # Case-insensitive replacement
+                # Case-insensitive match, casing-preserving substitution
                 pattern = re.compile(re.escape(phrase), re.IGNORECASE)
-                cleaned = pattern.sub(replacement, cleaned)
+                cleaned = pattern.sub(
+                    lambda m, r=replacement: _match_case(m.group(0), r), cleaned
+                )
         return cleaned
 
     def clean_recursive(obj: Any) -> Any:
         if isinstance(obj, str):
-            return clean_text(obj)
+            return obj if obj in master_texts else clean_text(obj)
         elif isinstance(obj, list):
             return [clean_recursive(item) for item in obj]
         elif isinstance(obj, dict):

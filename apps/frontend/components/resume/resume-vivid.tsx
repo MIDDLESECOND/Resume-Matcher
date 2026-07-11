@@ -170,6 +170,12 @@ export const ResumeVivid: React.FC<ResumeVividProps> = ({
             {renderContactDetail('Location', personalInfo.location)}
           </div>
         )}
+        {/* Header note - free-text line under the contact row (e.g. work authorization) */}
+        {personalInfo?.headerNote && (
+          <div className={`mt-1 ${baseStyles['resume-meta']} ${baseStyles['text-muted']}`}>
+            {personalInfo.headerNote}
+          </div>
+        )}
       </div>
 
       {/* Two-Column Grid */}

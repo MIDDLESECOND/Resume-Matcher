@@ -306,6 +306,12 @@ export const ResumeClean: React.FC<ResumeCleanProps> = ({
               ))}
             </div>
           )}
+          {/* Header note - free-text line under the contact row (e.g. work authorization) */}
+          {personalInfo.headerNote && (
+            <div className={`mt-1 ${baseStyles['resume-meta']} ${baseStyles['text-muted']}`}>
+              {personalInfo.headerNote}
+            </div>
+          )}
         </header>
       )}
 
