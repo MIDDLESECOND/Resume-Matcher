@@ -149,6 +149,21 @@ export const PersonalInfoForm: React.FC<PersonalInfoFormProps> = ({ data, onChan
             className="rounded-none border-black focus-visible:ring-0 focus-visible:ring-offset-0 focus-visible:border-blue-700 bg-transparent"
           />
         </div>
+        <div className="space-y-2 md:col-span-2">
+          <Label
+            htmlFor="headerNote"
+            className="font-mono text-xs uppercase tracking-wider text-steel-grey"
+          >
+            {t('resume.personalInfo.headerNote')}
+          </Label>
+          <Input
+            id="headerNote"
+            value={data.headerNote || ''}
+            onChange={(e) => handleChange('headerNote', e.target.value)}
+            placeholder={t('builder.personalInfoForm.placeholders.headerNote')}
+            className="rounded-none border-black focus-visible:ring-0 focus-visible:ring-offset-0 focus-visible:border-blue-700 bg-transparent"
+          />
+        </div>
       </div>
     </div>
   );

@@ -25,6 +25,7 @@ export interface PersonalInfo {
   website?: string;
   linkedin?: string;
   github?: string;
+  headerNote?: string;
 }
 
 export interface Experience {

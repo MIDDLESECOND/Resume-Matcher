@@ -440,7 +440,8 @@
         "location": "城市，国家",
         "website": "portfolio.com",
         "linkedin": "linkedin.com/in/zhangsan",
-        "github": "github.com/zhangsan"
+        "github": "github.com/zhangsan",
+        "headerNote": "例如：工作许可、可搬迁说明"
       }
     },
     "leftPanel": {
@@ -785,7 +786,8 @@
       "location": "所在地",
       "website": "个人网站",
       "linkedin": "领英",
-      "github": "GitHub"
+      "github": "GitHub",
+      "headerNote": "页眉附注"
     },
     "sections": {
       "personalInfo": "个人信息",

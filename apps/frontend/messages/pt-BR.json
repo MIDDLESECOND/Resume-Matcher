@@ -440,7 +440,8 @@
         "location": "São Paulo, Brasil",
         "website": "portfolio.com",
         "linkedin": "linkedin.com/in/joao",
-        "github": "github.com/joao"
+        "github": "github.com/joao",
+        "headerNote": "ex.: Autorização de trabalho, disponibilidade"
       }
     },
     "leftPanel": {
@@ -785,7 +786,8 @@
       "location": "Localização",
       "website": "Website",
       "linkedin": "LinkedIn",
-      "github": "GitHub"
+      "github": "GitHub",
+      "headerNote": "Nota do Cabeçalho"
     },
     "sections": {
       "personalInfo": "Informações Pessoais",

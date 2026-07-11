@@ -18,6 +18,7 @@ interface ProcessedResume {
     website?: string | null;
     linkedin?: string | null;
     github?: string | null;
+    headerNote?: string;
   };
   summary?: string;
   workExperience?: Array<{

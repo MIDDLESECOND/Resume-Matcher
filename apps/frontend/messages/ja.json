@@ -440,7 +440,8 @@
         "location": "都市、国",
         "website": "portfolio.com",
         "linkedin": "linkedin.com/in/taro",
-        "github": "github.com/taro"
+        "github": "github.com/taro",
+        "headerNote": "例：就労資格、転居可否など"
       }
     },
     "leftPanel": {
@@ -785,7 +786,8 @@
       "location": "所在地",
       "website": "ウェブサイト",
       "linkedin": "LinkedIn",
-      "github": "GitHub"
+      "github": "GitHub",
+      "headerNote": "ヘッダー補足"
     },
     "sections": {
       "personalInfo": "個人情報",

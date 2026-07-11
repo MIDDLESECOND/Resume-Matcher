@@ -308,42 +308,37 @@ export const ResumeSingleColumn: React.FC<ResumeSingleColumnProps> = ({
             </h2>
           )}
 
-          {/* Contact - Own line, centered */}
+          {/* Contact - Own line, centered. The separator lives inside the same
+              wrapping unit as the item it follows, so a line break never
+              strands a comma on its own. */}
           <div
             className={`flex flex-wrap justify-center gap-x-1 gap-y-1 ${baseStyles['resume-meta']}`}
           >
-            {renderContactDetail('Email', personalInfo.email, 'mailto:')}
-            {personalInfo.phone && (
-              <>
-                <span className={baseStyles['text-muted']}>,</span>
-                {renderContactDetail('Phone', personalInfo.phone, 'tel:')}
-              </>
-            )}
-            {personalInfo.location && (
-              <>
-                <span className={baseStyles['text-muted']}>,</span>
-                {renderContactDetail('Location', personalInfo.location)}
-              </>
-            )}
-            {personalInfo.website && (
-              <>
-                <span className={baseStyles['text-muted']}>,</span>
-                {renderContactDetail('Website', personalInfo.website)}
-              </>
-            )}
-            {personalInfo.linkedin && (
-              <>
-                <span className={baseStyles['text-muted']}>,</span>
-                {renderContactDetail('LinkedIn', personalInfo.linkedin)}
-              </>
-            )}
-            {personalInfo.github && (
-              <>
-                <span className={baseStyles['text-muted']}>,</span>
-                {renderContactDetail('GitHub', personalInfo.github)}
-              </>
-            )}
+            {(
+              [
+                ['Email', personalInfo.email, 'mailto:'],
+                ['Phone', personalInfo.phone, 'tel:'],
+                ['Location', personalInfo.location, ''],
+                ['Website', personalInfo.website, ''],
+                ['LinkedIn', personalInfo.linkedin, ''],
+                ['GitHub', personalInfo.github, ''],
+              ] as const
+            )
+              .filter(([, value]) => Boolean(value))
+              .map(([label, value, hrefPrefix], index, items) => (
+                <span key={label} className="inline-flex items-center">
+                  {renderContactDetail(label, value ?? undefined, hrefPrefix)}
+                  {index < items.length - 1 && <span className={baseStyles['text-muted']}>,</span>}
+                </span>
+              ))}
           </div>
+
+          {/* Header note - free-text line under the contact row (e.g. work authorization) */}
+          {personalInfo.headerNote && (
+            <div className={`mt-1 ${baseStyles['resume-meta']} ${baseStyles['text-muted']}`}>
+              {personalInfo.headerNote}
+            </div>
+          )}
         </header>
       )}
 

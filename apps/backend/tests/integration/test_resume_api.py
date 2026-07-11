@@ -149,6 +149,48 @@ class TestDeleteResume:
         assert resp.status_code == 404
 
 
+class TestUpdateResume:
+    """PATCH /api/v1/resumes/{resume_id}"""
+
+    @patch("app.routers.resumes.db", new_callable=AsyncMock)
+    async def test_header_note_roundtrips(
+        self, mock_db, client, mock_resume_record, sample_resume_copy
+    ):
+        mock_db.get_resume.return_value = mock_resume_record
+
+        async def echo_update(resume_id: str, fields: dict) -> dict:
+            return {**mock_resume_record, **fields}
+
+        mock_db.update_resume.side_effect = echo_update
+        sample_resume_copy["personalInfo"]["headerNote"] = (
+            "U.S. work authorized — no sponsorship required"
+        )
+        async with client:
+            resp = await client.patch("/api/v1/resumes/res-123", json=sample_resume_copy)
+        assert resp.status_code == 200
+        info = resp.json()["data"]["processed_resume"]["personalInfo"]
+        assert info["headerNote"] == "U.S. work authorized — no sponsorship required"
+
+    @patch("app.routers.resumes.db", new_callable=AsyncMock)
+    async def test_header_note_defaults_to_empty(
+        self, mock_db, client, mock_resume_record, sample_resume_copy
+    ):
+        mock_db.get_resume.return_value = mock_resume_record
+
+        async def echo_update(resume_id: str, fields: dict) -> dict:
+            return {**mock_resume_record, **fields}
+
+        mock_db.update_resume.side_effect = echo_update
+        # A payload predating the field (or from a client that omits it) must
+        # still validate, defaulting to an empty note.
+        sample_resume_copy["personalInfo"].pop("headerNote", None)
+        async with client:
+            resp = await client.patch("/api/v1/resumes/res-123", json=sample_resume_copy)
+        assert resp.status_code == 200
+        info = resp.json()["data"]["processed_resume"]["personalInfo"]
+        assert info["headerNote"] == ""
+
+
 class TestUpdateTitle:
     """PATCH /api/v1/resumes/{resume_id}/title"""
 

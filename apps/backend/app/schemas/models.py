@@ -129,6 +129,7 @@ class PersonalInfo(BaseModel):
     website: str | None = None
     linkedin: str | None = None
     github: str | None = None
+    headerNote: str = ""  # free-text line under the contact row (e.g. work authorization)
 
 
 class Experience(BaseModel):

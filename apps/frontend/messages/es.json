@@ -440,7 +440,8 @@
         "location": "Ciudad, País",
         "website": "portfolio.com",
         "linkedin": "linkedin.com/in/juan",
-        "github": "github.com/juan"
+        "github": "github.com/juan",
+        "headerNote": "p. ej. Autorización de trabajo, disponibilidad"
       }
     },
     "leftPanel": {
@@ -785,7 +786,8 @@
       "location": "Ubicación",
       "website": "Sitio Web",
       "linkedin": "LinkedIn",
-      "github": "GitHub"
+      "github": "GitHub",
+      "headerNote": "Nota de Encabezado"
     },
     "sections": {
       "personalInfo": "Información Personal",
