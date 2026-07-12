@@ -92,10 +92,35 @@ class TestApplyDiffsReplace:
         assert len(rejected) == 1
         assert result["workExperience"][0]["description"][0] == original_bullet
 
-    def test_replace_allows_intra_sentence_extension(self, sample_resume):
-        """Extending the same sentence (", providing X") is a real rephrase."""
+    def test_replace_rejects_appended_trailing_clause(self, sample_resume):
+        """Verbatim original + trailing clause is a bolt-on too.
+
+        Field evidence (run 3): blocked from appending sentences, the model
+        appended clauses instead ("..., demonstrating automation and
+        AI-enabled tooling", "..., supporting compensation and benefits
+        analysis" — a fabricated claim). If the full original survives as a
+        verbatim prefix, any added tail is filler.
+        """
         original_bullet = sample_resume["workExperience"][0]["description"][0]
         new_value = original_bullet.rstrip(".") + ", providing Total Rewards reporting."
+        changes = [
+            ResumeChange(
+                path="workExperience[0].description[0]",
+                action="replace",
+                original=original_bullet,
+                value=new_value,
+                reason="keyword integration",
+            )
+        ]
+        result, applied, rejected = apply_diffs(sample_resume, changes)
+        assert len(applied) == 0
+        assert len(rejected) == 1
+        assert result["workExperience"][0]["description"][0] == original_bullet
+
+    def test_replace_allows_genuine_rework(self, sample_resume):
+        """A rewrite whose wording actually changes still passes the gate."""
+        original_bullet = sample_resume["workExperience"][0]["description"][0]
+        new_value = "Delivered " + original_bullet.rstrip(".").lower() + " for Total Rewards stakeholders."
         changes = [
             ResumeChange(
                 path="workExperience[0].description[0]",

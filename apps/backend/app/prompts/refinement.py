@@ -140,7 +140,7 @@ KEYWORD_INJECTION_PROMPT = """Inject the following keywords into this resume by 
 CRITICAL RULES:
 1. Only reframe with keywords the master resume substantively supports (e.g., if the master shows "used Python for data analysis", surface "Python" and "data analysis" language)
 2. Do NOT add skills, technologies, or certifications not in the master resume
-3. Rework existing sentences so the keyword becomes part of the sentence itself. NEVER append an extra sentence to a bullet or the summary (e.g. never add trailing filler like "This involved X." or "This provided Y.") - a bullet must remain one natural statement of the same accomplishment
+3. Rework existing sentences so the keyword becomes part of the sentence itself. NEVER append an extra sentence or trailing clause to otherwise-unchanged text (never add trailing filler like "This involved X.", ", demonstrating Y", or ", showcasing Z skills") - a bullet must remain one natural statement of the same accomplishment, and the rewritten text must not be the original with words added at the end
 4. Do NOT add new bullet points, new skill entries, or any new content - do not invent new content, metrics, or work history; only rephrase what exists
 5. If a keyword cannot be integrated naturally into an existing sentence, leave that content unchanged; forced or bolted-on phrasing is worse than a missing keyword
 6. Never change the candidate's job titles or describe the candidate using the target job's title

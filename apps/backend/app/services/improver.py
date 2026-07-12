@@ -224,13 +224,16 @@ def _verify_original_matches(actual: Any, expected: str | list[str] | None) -> b
 
 
 def _is_append_only_edit(original: Any, new_value: str) -> bool:
-    """True when new_value is the original text with extra sentence(s) appended.
+    """True when new_value is the original text kept verbatim with a tail added.
 
-    Detects the "bolt-on" pattern: the original bullet kept verbatim, followed
-    by a sentence boundary and new trailing text (e.g. "<original>. This
-    dashboard provided key Total Rewards insights."). A genuine rephrase (the
-    opening words differ) or an intra-sentence extension ("..., providing X")
-    does not match — only whole appended sentences are flagged.
+    Detects the "bolt-on" pattern in BOTH shapes observed in real runs:
+    appended sentences ("<original>. This dashboard provided key Total
+    Rewards insights.") and appended trailing clauses ("<original>,
+    demonstrating automation and AI-enabled tooling"). The principle: a
+    genuine keyword integration reworks the sentence, so the full original
+    surviving as a verbatim prefix with any added tail is always filler (and
+    can smuggle unsupported claims). Rephrases whose wording actually changes
+    do not match.
     """
     if not isinstance(original, str):
         return False
@@ -241,8 +244,9 @@ def _is_append_only_edit(original: Any, new_value: str) -> bool:
     if not new.casefold().startswith(base.casefold()):
         return False
     remainder = new[len(base):]
-    # Appended sentence: original's end (sentence punctuation) then more text.
-    return bool(re.match(r"^[.!?]\s+\S", remainder))
+    # Any appended content with real words (not just closing punctuation)
+    # makes this an append-only edit.
+    return bool(re.search(r"\w", remainder))
 
 
 def apply_diffs(
@@ -315,8 +319,9 @@ def apply_diffs(
                 continue
 
             # Gate 5: Reject append-only "bolt-on" edits — the original text
-            # kept verbatim with extra sentence(s) tacked on ("... . This
-            # dashboard provided key <JD term> insights."). These read as
+            # kept verbatim with a tail tacked on, whether a sentence ("... .
+            # This dashboard provided key <JD term> insights.") or a trailing
+            # clause ("..., demonstrating automation"). These read as
             # AI-written filler and can smuggle in unsupported claims; real
             # keyword integration rewrites the sentence instead. Note this
             # deliberately constrains "full" mode's expand-a-bullet permission
