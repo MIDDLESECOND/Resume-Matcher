@@ -289,6 +289,31 @@ class TestSkillTargetPlanning:
         assert verified["accepted"][0]["source"] == "existing"
         assert verified["rejected"] == []
 
+    def test_verify_skill_target_plan_maps_plural_variant_and_rejects_vague_phrases(
+        self,
+    ):
+        """"LLMs" maps onto existing "LLM / RAG concepts"; "low-code platforms"
+        is rejected as a vague JD phrase even when the JD requires it."""
+        resume = {"additional": {"technicalSkills": ["LLM / RAG concepts", "Python"]}}
+        raw_plan = {
+            "target_skills": [
+                {"skill": "LLMs", "reason": "JD keyword"},
+                {"skill": "low-code platforms", "reason": "JD keyword"},
+            ]
+        }
+        verified = verify_skill_target_plan(
+            raw_plan,
+            original_resume_data=resume,
+            job_keywords={"required_skills": ["LLMs", "low-code platforms"]},
+            job_description="Experience with LLMs and low-code platforms.",
+        )
+        assert [item["skill"] for item in verified["accepted"]] == [
+            "LLM / RAG concepts"
+        ]
+        assert verified["accepted"][0]["source"] == "existing"
+        rejected = {item["skill"]: item["source"] for item in verified["rejected"]}
+        assert rejected == {"low-code platforms": "generic"}
+
     def test_verify_skill_target_plan_rejects_generic_keywords(self):
         """Vague JD words ("analytics", "automation") never become skill
         entries, even when the JD lists them as required."""

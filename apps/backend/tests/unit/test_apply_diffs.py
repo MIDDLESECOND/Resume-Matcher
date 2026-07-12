@@ -69,6 +69,46 @@ class TestApplyDiffsReplace:
         result, applied, rejected = apply_diffs(sample_resume, changes)
         assert len(applied) == 1
 
+    def test_replace_rejects_append_only_bolt_on(self, sample_resume):
+        """Original kept verbatim + appended sentence = bolt-on, rejected.
+
+        The pattern smuggles in unsupported claims ("This dashboard provided
+        key Total Rewards insights.") and reads as AI filler — real keyword
+        integration rewrites the sentence instead.
+        """
+        original_bullet = sample_resume["workExperience"][0]["description"][0]
+        changes = [
+            ResumeChange(
+                path="workExperience[0].description[0]",
+                action="replace",
+                original=original_bullet,
+                value=original_bullet.rstrip(".")
+                + ". This provided key Total Rewards insights for HR.",
+                reason="keyword integration",
+            )
+        ]
+        result, applied, rejected = apply_diffs(sample_resume, changes)
+        assert len(applied) == 0
+        assert len(rejected) == 1
+        assert result["workExperience"][0]["description"][0] == original_bullet
+
+    def test_replace_allows_intra_sentence_extension(self, sample_resume):
+        """Extending the same sentence (", providing X") is a real rephrase."""
+        original_bullet = sample_resume["workExperience"][0]["description"][0]
+        new_value = original_bullet.rstrip(".") + ", providing Total Rewards reporting."
+        changes = [
+            ResumeChange(
+                path="workExperience[0].description[0]",
+                action="replace",
+                original=original_bullet,
+                value=new_value,
+                reason="keyword integration",
+            )
+        ]
+        result, applied, rejected = apply_diffs(sample_resume, changes)
+        assert len(applied) == 1
+        assert result["workExperience"][0]["description"][0] == new_value
+
 
 class TestApplyDiffsAppend:
     """Tests for the 'append' action."""
@@ -187,6 +227,31 @@ class TestApplyDiffsAddSkill:
         assert len(rejected) == 1
         assert result["additional"]["technicalSkills"] == [
             "Microsoft AI Builder",
+            "Python",
+        ]
+
+    def test_add_skill_rejects_plural_variant(self, sample_resume):
+        """"LLMs" must not be appended when "LLM / RAG concepts" exists."""
+        data = copy.deepcopy(sample_resume)
+        data["additional"]["technicalSkills"] = ["LLM / RAG concepts", "Python"]
+        changes = [
+            ResumeChange(
+                path="additional.technicalSkills",
+                action="add_skill",
+                original=None,
+                value="LLMs",
+                reason="Plural variant duplicate should be rejected",
+            )
+        ]
+        result, applied, rejected = apply_diffs(
+            data,
+            changes,
+            allowed_skill_targets=[{"skill": "LLMs"}],
+        )
+        assert len(applied) == 0
+        assert len(rejected) == 1
+        assert result["additional"]["technicalSkills"] == [
+            "LLM / RAG concepts",
             "Python",
         ]
 

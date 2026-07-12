@@ -223,6 +223,28 @@ def _verify_original_matches(actual: Any, expected: str | list[str] | None) -> b
     return actual.strip().casefold() == expected.strip().casefold()
 
 
+def _is_append_only_edit(original: Any, new_value: str) -> bool:
+    """True when new_value is the original text with extra sentence(s) appended.
+
+    Detects the "bolt-on" pattern: the original bullet kept verbatim, followed
+    by a sentence boundary and new trailing text (e.g. "<original>. This
+    dashboard provided key Total Rewards insights."). A genuine rephrase (the
+    opening words differ) or an intra-sentence extension ("..., providing X")
+    does not match — only whole appended sentences are flagged.
+    """
+    if not isinstance(original, str):
+        return False
+    base = original.strip().rstrip(".!?").rstrip()
+    new = new_value.strip()
+    if not base or len(new) <= len(base):
+        return False
+    if not new.casefold().startswith(base.casefold()):
+        return False
+    remainder = new[len(base):]
+    # Appended sentence: original's end (sentence punctuation) then more text.
+    return bool(re.match(r"^[.!?]\s+\S", remainder))
+
+
 def apply_diffs(
     original: dict[str, Any],
     changes: list[ResumeChange],
@@ -289,6 +311,20 @@ def apply_diffs(
             # Replace must use a string value (not list)
             if not isinstance(change.value, str):
                 logger.info("Diff rejected (replace with non-string value): %s", path)
+                rejected.append(change)
+                continue
+
+            # Gate 5: Reject append-only "bolt-on" edits — the original text
+            # kept verbatim with extra sentence(s) tacked on ("... . This
+            # dashboard provided key <JD term> insights."). These read as
+            # AI-written filler and can smuggle in unsupported claims; real
+            # keyword integration rewrites the sentence instead. Note this
+            # deliberately constrains "full" mode's expand-a-bullet permission
+            # to the `append` action (new bullets), which has its own gates.
+            if _is_append_only_edit(actual_value, change.value):
+                logger.info(
+                    "Diff rejected (append-only sentence bolt-on): %s", path
+                )
                 rejected.append(change)
                 continue
 
@@ -721,13 +757,20 @@ def _skill_mentioned_in_text(skill: str, text: str) -> bool:
 
 # Generic JD keywords that must never become standalone skill entries — they
 # carry no signal on a skills list ("analytics", "automation") and read as
-# keyword-stuffing filler. Compared via _normalize_skill_key.
+# keyword-stuffing filler. Compared via _normalize_skill_key (plural forms
+# are also checked via _is_generic_skill).
 GENERIC_SKILL_STOPLIST: frozenset[str] = frozenset(
     {
         "analytics",
         "automation",
         "ai",
         "ai-enabled tools",
+        "ai-enabled tooling",
+        "llm",
+        "llms",
+        "low-code",
+        "low-code platform",
+        "low-code platforms",
         "data",
         "technology",
         "software",
@@ -743,18 +786,47 @@ GENERIC_SKILL_STOPLIST: frozenset[str] = frozenset(
 )
 
 
+def _singular_form(term: str) -> str | None:
+    """Naive singular of a plural term ("LLMs" -> "LLM"), or None.
+
+    Skips short terms and -ss endings so acronyms like "AWS" and words like
+    "business" don't get mangled; a wrong singular can only widen matching
+    against whole terms, so false positives are unlikely in practice.
+    """
+    stripped = term.strip()
+    lower = stripped.lower()
+    if len(stripped) > 3 and lower.endswith("s") and not lower.endswith("ss"):
+        return stripped[:-1]
+    return None
+
+
+def _is_generic_skill(skill_key: str) -> bool:
+    """True when a normalized skill key (or its singular form) is stoplisted."""
+    if skill_key in GENERIC_SKILL_STOPLIST:
+        return True
+    singular = _singular_form(skill_key)
+    return singular is not None and singular in GENERIC_SKILL_STOPLIST
+
+
 def _find_skill_variant(skill: str, existing: list[Any]) -> str | None:
     """Return the existing skill that a proposed skill duplicates, if any.
 
     Catches whole-term containment in either direction, so "AI Builder" is a
     variant of an existing "Microsoft AI Builder" (and vice versa) — adding
-    both would render a duplicated skills list.
+    both would render a duplicated skills list. Singular forms are matched
+    too, so "LLMs" duplicates an existing "LLM / RAG concepts".
     """
+    skill_forms = [skill]
+    if (singular := _singular_form(skill)) is not None:
+        skill_forms.append(singular)
     for item in existing:
         if not isinstance(item, str) or not item.strip():
             continue
-        if _skill_mentioned_in_text(skill, item) or _skill_mentioned_in_text(
-            item, skill
+        item_forms = [item]
+        if (item_singular := _singular_form(item)) is not None:
+            item_forms.append(item_singular)
+        if any(_skill_mentioned_in_text(form, item) for form in skill_forms) or any(
+            _skill_mentioned_in_text(form, skill) for form in item_forms
         ):
             return item
     return None
@@ -869,7 +941,7 @@ def verify_skill_target_plan(
                         "reason": reason or f"Variant of existing skill '{variant_of}'",
                     }
                 )
-        elif skill_key in GENERIC_SKILL_STOPLIST:
+        elif _is_generic_skill(skill_key):
             rejected.append(
                 {
                     "skill": skill,

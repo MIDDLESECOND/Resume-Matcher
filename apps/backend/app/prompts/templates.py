@@ -26,7 +26,8 @@ RESUME_SCHEMA_EXAMPLE = """{
     "location": "San Francisco, CA",
     "website": "https://johndoe.dev",
     "linkedin": "linkedin.com/in/johndoe",
-    "github": "github.com/johndoe"
+    "github": "github.com/johndoe",
+    "headerNote": "U.S. work authorized — no sponsorship required"
   },
   "summary": "Experienced software engineer with 5+ years...",
   "workExperience": [
@@ -173,6 +174,7 @@ Rules:
 - Normalize date separators: "2020-2021" → "2020 - 2021", "Current"/"Ongoing" → "Present". Do NOT discard months.
 - For ambiguous dates like "3 years experience", infer approximate years from context or use "~YYYY"
 - Flag overlapping dates (concurrent roles) by preserving both, don't merge
+- Standalone header lines near the contact info (work authorization, visa status, relocation availability) go into personalInfo.headerNote verbatim; use "" when absent
 
 Resume to parse:
 {resume_text}"""
@@ -530,6 +532,7 @@ RULES:
 11. By DEFAULT, scan the summary and every work, project, and education description for content that already demonstrates a job-description keyword or skill, and reframe that text using the job description's terminology where it is not already phrased that way (per rule 9, leave content that already aligns well), while preserving the candidate's actual accomplishment. Do NOT add new work, metrics, or responsibilities; only restate existing content in the JD's language, and verify every reframe stays factually accurate.
 12. Preserve original capitalization, especially for proper nouns, technical terms (e.g., REST, API, AWS), and acronyms. Do not change the casing of words that were capitalized in the original.
 13. NEVER change the candidate's job titles or describe the candidate using the target job's title (e.g., do not rewrite the summary of a "Solutions Architect" to open with the posting's title). Keep the summary anchored to the candidate's actual current title, promotions, and tenure.
+14. Rework sentences so keywords become part of the sentence itself. NEVER append an extra sentence to an existing bullet or the summary (no trailing filler like "This involved X." or "This provided Y.") - if a keyword cannot be integrated naturally, leave that text unchanged.
 
 PATHS you can target:
 - "summary" — the resume summary text

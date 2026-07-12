@@ -29,6 +29,20 @@ class TestJdIncorporationIsDefault:
         assert "NEVER append an extra sentence" in KEYWORD_INJECTION_PROMPT
         assert "leave that content unchanged" in KEYWORD_INJECTION_PROMPT
 
+    def test_diff_prompt_integrates_without_bolt_ons(self):
+        # The diff stage produced the same bolt-on artifact in field reports
+        # ("This dashboard provided key Total Rewards insights.") — the rule
+        # must exist here too, not just in the refiner's injection prompt.
+        assert "NEVER append an extra sentence" in DIFF_IMPROVE_PROMPT
+
+    def test_parse_schema_carries_header_note(self):
+        # Without headerNote in the parse schema, work-authorization /
+        # relocation lines are silently dropped at upload and can never be
+        # rendered by any template.
+        from app.prompts.templates import RESUME_SCHEMA_EXAMPLE
+
+        assert '"headerNote"' in RESUME_SCHEMA_EXAMPLE
+
     def test_cover_letter_reframes_in_jd_terminology(self):
         assert "terminology" in COVER_LETTER_PROMPT.lower()
 
